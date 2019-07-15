@@ -1,4 +1,4 @@
-# vue-activity-cli
+# [Starter] Udemy Project Vue Activity (Project 2)
 
 ## Project setup
 ```
