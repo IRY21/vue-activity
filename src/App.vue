@@ -1,5 +1,7 @@
 <template>
-  <div id="ActivityApp">
+  <div  
+    id="ActivityApp"
+  >
     <nav class="navbar is-white topNav">
       <div class="container">
         <div class="navbar-brand">
@@ -7,43 +9,41 @@
         </div>
       </div>
     </nav>
-    <nav class="navbar is-white">
-      <div class="container">
-        <div class="navbar-menu">
-          <div class="navbar-start">
-            <a 
-              class="navbar-item is-active" 
-              href="#"
-            >Newest</a>
-            <a 
-              class="navbar-item" 
-              href="#"
-            >In Progress</a>
-            <a 
-              class="navbar-item" 
-              href="#"
-            >Finished</a>
-          </div>
-        </div>
-      </div>
-    </nav>
+    <TheNavbar 
+      @filterSelected="setFilter"
+    />
     <section class="container">
       <div class="columns">
         <div class="column is-3">
           <ActivityCreate
             :categories="categories"
-            @activityCreated="addActivity"
           />
         </div>
         <div class="column is-9">
-          <div class="box content">
-            <ActivityItem 
-              v-for="activity in activities" 
-              :key="activity.id" 
-              :activity="activity"
-            />
-            <div class="activity-length">Currently {{ activityLength }} activities</div>
-            <div class="activity-motivation">{{ activityMotivation }}</div>
+          <div 
+            class="box content" 
+            :class="{ fetching: isFetching, 'has-error': error }"
+          >
+            <div v-if="error">
+              {{ error }}
+            </div>
+            <div v-else>
+              <div v-if="isFetching">
+                Loading ...
+              </div>
+              <div v-if="isDataLoaded">
+                <ActivityItem 
+                  v-for="activity in filteredActivities" 
+                  :key="activity.id" 
+                  :activity="activity"
+                  :categories="categories"
+                />
+              </div>
+              <div v-if="!isFetching">
+                <div class="activity-length">Currently {{ activityLength }} activities</div>
+                <div class="activity-motivation">{{ activityMotivation }}</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -52,48 +52,106 @@
 </template>
 
 <script>
-import { fetchActivities, fetchUser, fetchCategories } from '@/api'
+import Vue from 'vue'
+import store from '@/store'
+import fakeApi from '@/lib/fakeApi.js'
 
-import ActivityItem from "@/components/ActivityItem";
-import ActivityCreate from "@/components/ActivityCreate";
+//import { fetchActivities, fetchUser, fetchCategories, deleteActivityAPI } from '@/api'
+
+import ActivityItem from "@/components/ActivityItem"
+import ActivityCreate from "@/components/ActivityCreate"
+import TheNavbar from "@/components/TheNavbar"
 
 export default {
   name: "App",
-  components: { ActivityItem, ActivityCreate },
+  components: { ActivityItem, ActivityCreate, TheNavbar },
   data() {
+    const { state: {activities, categories} } = store
     return {
       creator: 'IY21',
       appName: 'Activity Planner',
+      isFetching: false,
+      error: null,
       user: {},
-      activities: {},
-      categories: {}
+      activities,
+      categories,
+      filter: 'all'
     };
   },
   computed: {
     fullAppName() {
-      return `${ this.appName } by ${ this.creator }`;
+      return `${ this.appName } by ${ this.creator }`
     },
     activityLength() {
-      return Object.keys(this.activities).length;
+      return Object.keys(this.activities).length
     },
     activityMotivation() {
       if (this.activityLength && this.activityLength < 5) {
-        return 'Nice to see some activities (:';
+        return 'Nice to see some activities (:'
       } else if (this.activityLength >= 5) {
-        return 'So many activities! Good Job!';
+        return 'So many activities! Good Job!'
       } else {
-        return 'No activities, so sad :(';
+        return 'No activities, so sad :('
       }
+    },
+    activitiesLength() {
+      return Object.keys(this.activities).length
+    },
+    categoriesLength() {
+      return Object.keys(this.categories).length
+    },
+    isDataLoaded() {
+      return this.activitiesLength && this.categoriesLength
+    },
+    filteredActivities() {
+      let filteredActivities = {}
+      let  condition
+
+      if(this.filter === 'all') {
+        return this.activities
+      }
+
+      if(this.filter === 'inprogress') {
+        condition = (value) => value > 0 && value < 100
+      } else if(this.filter === 'finished') {
+        condition = (value) => value === 100
+      } else if(this.filter === 'notstarted') {
+        condition = (value) => value === 0
+      }
+
+      filteredActivities = Object.values(this.activities)
+        .filter(activity => {
+          return condition(activity.progress)
+        })
+
+      return filteredActivities
     }
   },
   created() {
-    this.activities = fetchActivities();
-    this.user = fetchUser();
-    this.categories = fetchCategories();
+    // ONLY RUN ONCE TO POPULATE LOCAL STORAGE
+    //fakeApi.fillDB()
+    
+    this.isFetching = true
+    store.fetchActivities()
+      .then(activities => {
+        this.isFetching = false
+      })
+      .catch((err) => {
+        this.error = err
+        this.isFetching = false
+      })
+    this.user = store.fetchUser()
+    store.fetchCategories()
+      .then(categories => {
+      })
+      .catch((err) => {
+        this.error = err
+        this.isFetching = false
+      })   
   },
   methods: {
-    addActivity(newActivity) {
-      console.log(newActivity);
+    setFilter(filterOption) {
+      this.filter = filterOption
     }
   }
 };
@@ -107,6 +165,14 @@ body {
 }
 footer {
   background-color: #f2f6fa !important;
+}
+
+.fetching {
+  border: 2px solid orange;
+}
+
+.has-error {
+  border: 2px solid tomato;
 }
 
 .activity-length {
@@ -126,9 +192,7 @@ footer {
 .container .columns {
   margin: 3rem 0;
 }
-.navbar-menu .navbar-item {
-  padding: 0 2rem;
-}
+
 aside.menu {
   padding-top: 3rem;
 }
